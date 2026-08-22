@@ -1,0 +1,84 @@
+{% extends 'base.html' %}{% block content %}
+<div class="sectionhead">
+  <div><span class="pill">AI STUDY MATERIAL</span><h1>Upload & Understand</h1><p>Upload one or several PDFs, images, or documents. PathPilot extracts the content, uses OpenCV + OCR for images/scans, and explains it in simple language.</p></div>
+</div>
+
+<div class="card upload-card">
+<form method="post" enctype="multipart/form-data" class="upload-form" id="materialForm">
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose study files">
+    <input id="materialInput" type="file" name="material" accept="application/pdf,image/*,.pdf,.txt,.md,.csv,.docx,.pptx,.xlsx" multiple>
+    <div id="emptyPicker">
+      <strong>📄 PDF or 🖼️ Image</strong>
+      <span>Click here to choose files</span>
+      <small>PDF, images, TXT, Markdown, CSV, DOCX and PPTX. You can select more than one.</small>
+    </div>
+  </div>
+
+  <div id="selectedFiles" class="selected-files" hidden>
+    <div class="selected-header"><strong>Selected files</strong><button type="button" class="btn small" id="addAnother">＋ Add another file</button></div>
+    <div id="fileList" class="file-list"></div>
+  </div>
+
+  <div class="upload-actions">
+    <button class="btn primary" id="analyzeBtn" type="submit" disabled>✨ Summarize & Explain</button>
+    <button class="btn" id="clearFiles" type="button" hidden>Clear</button>
+  </div>
+</form>
+<div class="notice">Your selected files are sent together when you click Summarize & Explain. After processing, each uploaded file is shown with its original preview, simple explanation, key ideas and revision notes.</div>
+</div>
+
+{% if uploads %}
+<div class="sectionhead"><div><h2>Previous materials</h2><p>Open any previously uploaded study file.</p></div><a class="btn primary" href="#materialForm">＋ Upload another file</a></div>
+<div class="days">
+{% for u in uploads %}<article class="card material-row"><div><span class="pill">{{u['file_type']|upper}}</span><h3>{{u['filename']}}</h3><p>{{u['summary'][:260] if u['summary'] else 'No summary'}}</p></div><a class="btn small" href="{{url_for('material_view',upload_id=u['id'])}}">Open material →</a></article>{% endfor %}
+</div>{% endif %}
+
+<script>
+const input=document.getElementById('materialInput');
+const dropzone=document.getElementById('dropzone');
+const empty=document.getElementById('emptyPicker');
+const selected=document.getElementById('selectedFiles');
+const fileList=document.getElementById('fileList');
+const addAnother=document.getElementById('addAnother');
+const clearBtn=document.getElementById('clearFiles');
+const form=document.getElementById('materialForm');
+const btn=document.getElementById('analyzeBtn');
+let chosen=[];
+
+function formatSize(n){return n<1024*1024?(n/1024).toFixed(1)+' KB':(n/1024/1024).toFixed(2)+' MB';}
+function isAllowed(file){return file.type==='application/pdf'||file.type.startsWith('image/')||/\.(pdf|png|jpe?g|webp|bmp|tiff?|txt|md|csv|docx|pptx)$/i.test(file.name);}
+function renderFiles(){
+  fileList.innerHTML='';
+  chosen.forEach((file,i)=>{
+    const row=document.createElement('div'); row.className='file-row';
+    const thumb=document.createElement('div'); thumb.className='file-thumb';
+    if(file.type.startsWith('image/')){const img=document.createElement('img'); img.src=URL.createObjectURL(file); thumb.appendChild(img);}
+    else thumb.textContent='📄';
+    const meta=document.createElement('div'); meta.className='file-meta';
+    const name=document.createElement('strong'); name.textContent=file.name;
+    const size=document.createElement('span'); size.textContent=formatSize(file.size);
+    meta.append(name,size);
+    const remove=document.createElement('button'); remove.type='button'; remove.className='btn small'; remove.textContent='Remove';
+    remove.onclick=()=>{chosen.splice(i,1); renderFiles();};
+    row.append(thumb,meta,remove); fileList.appendChild(row);
+  });
+  const has=chosen.length>0;
+  selected.hidden=!has; empty.hidden=has; clearBtn.hidden=!has; btn.disabled=!has;
+}
+function addFiles(files){
+  for(const file of files){if(isAllowed(file) && !chosen.some(x=>x.name===file.name && x.size===file.size)) chosen.push(file);}
+  // Rebuild the FileList so multiple files are actually submitted to Flask.
+  const dt=new DataTransfer(); chosen.forEach(f=>dt.items.add(f)); input.files=dt.files;
+  renderFiles();
+}
+dropzone.addEventListener('click',()=>input.click());
+dropzone.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+input.addEventListener('change',()=>addFiles(Array.from(input.files)));
+addAnother.addEventListener('click',()=>input.click());
+clearBtn.addEventListener('click',()=>{chosen=[];input.value='';renderFiles();});
+['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.add('dragover');}));
+['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev,e=>{e.preventDefault();dropzone.classList.remove('dragover');}));
+dropzone.addEventListener('drop',e=>addFiles(Array.from(e.dataTransfer.files)));
+form.addEventListener('submit',()=>{btn.disabled=true;btn.textContent='⏳ Reading, improving & explaining...';});
+</script>
+{% endblock %}
